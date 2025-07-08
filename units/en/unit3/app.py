@@ -7,15 +7,17 @@ from langgraph.graph import START, StateGraph
 from langgraph.checkpoint.memory import MemorySaver
 from langgraph.prebuilt import tools_condition
 from langchain_huggingface import HuggingFaceEndpoint, ChatHuggingFace
-from units.en.unit3.tools import search_tool, weather_info_tool, hub_stats_tool, guest_info_tool
-# Generate the chat interface, including the tools
+from units.en.unit3.tools import guest_info_tool, weather_info_tool, hub_stats_tool
+
 llm = HuggingFaceEndpoint(
     repo_id="Qwen/Qwen2.5-Coder-32B-Instruct",
     huggingfacehub_api_token=os.environ.get("HUGGINGFACE_API_TOKEN"),
+    temperature=0.1,
+    max_new_tokens=1024,
 )
 
 chat = ChatHuggingFace(llm=llm, verbose=True)
-tools = [search_tool, weather_info_tool, hub_stats_tool, guest_info_tool]
+tools = [weather_info_tool, hub_stats_tool, guest_info_tool]
 chat_with_tools = chat.bind_tools(tools)
 
 # Generate the AgentState and Agent graph
@@ -27,11 +29,11 @@ def assistant(state: AgentState):\
         "messages": [chat_with_tools.invoke(state["messages"])],
     }
 
-def invoke(agent, message):
+def invoke(agent, messages: list[HumanMessage]) -> AgentState:
     """Invoke the assistant with the current state."""
     thread_id = "conversation-1"
     config = {"configurable": {"thread_id": thread_id}}
-    return agent.invoke(message, config=config)
+    return agent.invoke({"messages": messages}, config=config)
 
 ## The graph
 builder = StateGraph(AgentState)
@@ -52,16 +54,7 @@ builder.add_edge("tools", "assistant")
 memory = MemorySaver()
 alfred = builder.compile(checkpointer=memory)
 
-messages = [HumanMessage(content="Tell me about our guest named 'Lady Ada Lovelace'.")]
-response = invoke(alfred, {"messages": messages})
+response = invoke(alfred, [HumanMessage(content="I need to speak with 'Dr. Nikola Tesla' about recent advancements in wireless energy. Can you help me prepare for this conversation?")])
 
 print("🎩 Alfred's Response:")
-
-print(response['messages'][-1].content)
-
-messages = [HumanMessage(content="What projects is she currently working on?")]
-response = invoke(alfred, {"messages": messages})
-
-print("🎩 Alfred's Response:")
-
 print(response['messages'][-1].content)
